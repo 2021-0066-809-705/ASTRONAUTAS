@@ -1,0 +1,184 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <algorithm>
+
+class Astronauta {
+public:
+    std::string cpf;
+    std::string nome;
+    int idade;
+    bool disponivel;
+
+    Astronauta(std::string cpf, std::string nome, int idade)
+        : cpf(cpf), nome(nome), idade(idade), disponivel(true) {}
+};
+
+class Voo {
+public:
+    int codigo;
+    std::vector<Astronauta*> passageiros;
+    bool emPlanejamento;
+    bool emCurso;
+    bool finalizado;
+    bool sucesso;
+
+    Voo(int codigo)
+        : codigo(codigo), emPlanejamento(true), emCurso(false), finalizado(false), sucesso(false) {}
+
+    void adicionarAstronauta(Astronauta* astronauta) {
+        if (emPlanejamento) {
+            passageiros.push_back(astronauta);
+        }
+    }
+
+    void removerAstronauta(std::string cpf) {
+        if (emPlanejamento) {
+            passageiros.erase(std::remove_if(passageiros.begin(), passageiros.end(),
+                                             [&cpf](Astronauta* a) { return a->cpf == cpf; }),
+                              passageiros.end());
+        }
+    }
+
+    void lancar() {
+        if (emPlanejamento && !passageiros.empty() &&
+            std::all_of(passageiros.begin(), passageiros.end(), [](Astronauta* a) { return a->disponivel; })) {
+            emPlanejamento = false;
+            emCurso = true;
+            for (Astronauta* a : passageiros) {
+                a->disponivel = false;
+            }
+        }
+    }
+
+    void finalizar(bool sucesso) {
+        if (emCurso) {
+            emCurso = false;
+            finalizado = true;
+            this->sucesso = sucesso;
+            for (Astronauta* a : passageiros) {
+                if (sucesso) {
+                    a->disponivel = true;
+                } else {
+                    a->disponivel = false;
+                }
+            }
+        }
+    }
+
+    void explodir() {
+        if (emCurso) {
+            emCurso = false;
+            finalizado = true;
+            sucesso = false;
+            for (Astronauta* a : passageiros) {
+                a->disponivel = false;
+            }
+        }
+    }
+};
+
+class Sistema {
+private:
+    std::unordered_map<std::string, Astronauta> astronautas;
+    std::vector<Voo> voos;
+    std::vector<Astronauta*> mortos;
+
+public:
+    void cadastrarAstronauta(std::string cpf, std::string nome, int idade) {
+        astronautas[cpf] = Astronauta(cpf, nome, idade);
+    }
+
+    void cadastrarVoo(int codigo) {
+        voos.emplace_back(codigo);
+    }
+
+    void adicionarAstronautaEmVoo(std::string cpf, int codigoVoo) {
+        auto& voo = findVoo(codigoVoo);
+        if (voo.emPlanejamento && astronautas.find(cpf) != astronautas.end()) {
+            voo.adicionarAstronauta(&astronautas[cpf]);
+        }
+    }
+
+    void removerAstronautaDeVoo(std::string cpf, int codigoVoo) {
+        auto& voo = findVoo(codigoVoo);
+        if (voo.emPlanejamento) {
+            voo.removerAstronauta(cpf);
+        }
+    }
+
+    void lancarVoo(int codigoVoo) {
+        auto& voo = findVoo(codigoVoo);
+        voo.lancar();
+    }
+
+    void explodirVoo(int codigoVoo) {
+        auto& voo = findVoo(codigoVoo);
+        voo.explodir();
+        for (Astronauta* a : voo.passageiros) {
+            mortos.push_back(a);
+        }
+    }
+
+    void finalizarVoo(int codigoVoo, bool sucesso) {
+        auto& voo = findVoo(codigoVoo);
+        voo.finalizar(sucesso);
+    }
+
+    void listarVoos() {
+        for (const Voo& voo : voos) {
+            std::cout << "Voo " << voo.codigo << ": ";
+            if (voo.emPlanejamento) {
+                std::cout << "Planejado\n";
+            } else if (voo.emCurso) {
+                std::cout << "Em curso\n";
+            } else if (voo.finalizado) {
+                std::cout << "Finalizado (" << (voo.sucesso ? "Sucesso" : "Falha") << ")\n";
+            }
+            for (const Astronauta* a : voo.passageiros) {
+                std::cout << " - " << a->nome << "\n";
+            }
+        }
+    }
+
+    void listarAstronautasMortos() {
+        for (const Astronauta* a : mortos) {
+            std::cout << "CPF: " << a->cpf << ", Nome: " << a->nome << "\n";
+            std::cout << "Voos que participou:\n";
+            for (const Voo& voo : voos) {
+                if (std::find(voo.passageiros.begin(), voo.passageiros.end(), a) != voo.passageiros.end()) {
+                    std::cout << " - Voo " << voo.codigo << "\n";
+                }
+            }
+        }
+    }
+
+private:
+    Voo& findVoo(int codigoVoo) {
+        auto it = std::find_if(voos.begin(), voos.end(), [&codigoVoo](Voo& v) { return v.codigo == codigoVoo; });
+        if (it != voos.end()) {
+            return *it;
+        }
+        throw std::runtime_error("Voo não encontrado");
+    }
+};
+
+int main() {
+    Sistema sistema;
+
+    sistema.cadastrarAstronauta("123", "Neil Armstrong", 38);
+    sistema.cadastrarAstronauta("456", "Buzz Aldrin", 39);
+    
+    sistema.cadastrarVoo(1);
+    sistema.adicionarAstronautaEmVoo("123", 1);
+    sistema.adicionarAstronautaEmVoo("456", 1);
+
+    sistema.lancarVoo(1);
+    sistema.finalizarVoo(1, true);
+
+    sistema.listarVoos();
+    sistema.listarAstronautasMortos();
+
+    return 0;
+}
